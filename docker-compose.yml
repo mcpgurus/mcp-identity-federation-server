@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  mcp-federation-server:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Server Configuration
+      - SERVER_PORT=8080
+      - SERVER_SERVLET_CONTEXT_PATH=/mcp-federation
+      
+      # Redis Configuration
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      
+      # Identity Provider Configuration
+      - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID:-your-entra-client-id}
+      - ENTRA_CLIENT_SECRET=${ENTRA_CLIENT_SECRET:-your-entra-client-secret}
+      - ENTRA_TENANT_ID=${ENTRA_TENANT_ID:-your-tenant-id}
+      
+      - OKTA_CLIENT_ID=${OKTA_CLIENT_ID:-your-okta-client-id}
+      - OKTA_CLIENT_SECRET=${OKTA_CLIENT_SECRET:-your-okta-client-secret}
+      - OKTA_DOMAIN=${OKTA_DOMAIN:-your-domain.okta.com}
+      
+      - PING_CLIENT_ID=${PING_CLIENT_ID:-your-ping-client-id}
+      - PING_CLIENT_SECRET=${PING_CLIENT_SECRET:-your-ping-client-secret}
+      - PING_BASE_URL=${PING_BASE_URL:-https://your-ping-server.com}
+      
+      # Policy Engine Configuration (Optional)
+      - POLICY_ENGINE_ENDPOINT=${POLICY_ENGINE_ENDPOINT:-}
+      - POLICY_ENGINE_TOKEN=${POLICY_ENGINE_TOKEN:-}
+      
+      # Logging
+      - LOGGING_LEVEL_ORG_MCPGURUS_MCP_FEDERATION=DEBUG
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/mcp-federation/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # Optional: Policy Engine (Open Policy Agent example)
+  opa:
+    image: openpolicyagent/opa:latest
+    ports:
+      - "8181:8181"
+    command: run --server --addr 0.0.0.0:8181 /policies
+    volumes:
+      - ./policies:/policies
+    profiles:
+      - policy-engine
+    restart: unless-stopped
+
+volumes:
+  redis_data:

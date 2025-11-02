@@ -1,0 +1,135 @@
+# MCP Identity Federation Server Configuration
+server:
+  port: 8080
+  servlet:
+    context-path: /mcp-idp-federation
+
+spring:
+  application:
+    name: mcp-identity-federation-server
+  
+  # Redis Configuration for Token Storage
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+  
+  # Cache Configuration
+  # Options:
+  # - simple: Use in-memory cache (good for development/single instance)
+  # - redis: Use Redis cache (requires Redis server, fails if unavailable)  
+  # - auto: Try Redis first, fallback to simple if Redis unavailable (recommended)
+  cache:
+    type: ${CACHE_TYPE:auto}
+    redis:
+      time-to-live: 3600000 # 1 hour in milliseconds
+
+# MCP Federation Configuration
+mcp:
+  federation:
+    # Cache Configuration
+    cache:
+      # Cache type: redis, simple, auto (auto tries redis, falls back to simple)
+      type: ${MCP_CACHE_TYPE:auto}
+      # Redis connection timeout for fallback detection
+      redis-connection-timeout: 2000
+      # Enable cache fallback on Redis connection failure
+      enable-fallback: true
+    # Server Configuration
+    server:
+      base-url: http://localhost:8080/mcp-idp-federation
+      api-key-expiry-hours: 24
+      session-timeout-minutes: 30
+    
+    # Identity Providers Configuration
+    identity-providers:
+      # Microsoft Entra ID Configuration
+      entra-id:
+        enabled: true
+        type: oidc
+        name: "Microsoft Entra ID"
+        client-id: ${ENTRA_CLIENT_ID:your-entra-client-id}
+        client-secret: ${ENTRA_CLIENT_SECRET:your-entra-client-secret}
+        tenant-id: ${ENTRA_TENANT_ID:your-tenant-id}
+        auth-endpoint: https://login.microsoftonline.com/${mcp.federation.identity-providers.entra-id.tenant-id}/oauth2/v2.0/authorize
+        token-endpoint: https://login.microsoftonline.com/${mcp.federation.identity-providers.entra-id.tenant-id}/oauth2/v2.0/token
+        userinfo-endpoint: https://graph.microsoft.com/v1.0/me
+        scopes: openid profile email offline_access
+        redirect-uri: ${mcp.federation.server.base-url}/auth/callback/entra-id
+        
+      # Okta Configuration
+      okta:
+        enabled: false
+        type: oidc
+        name: "Okta"
+        client-id: ${OKTA_CLIENT_ID:your-okta-client-id}
+        client-secret: ${OKTA_CLIENT_SECRET:your-okta-client-secret}
+        domain: ${OKTA_DOMAIN:your-domain.okta.com}
+        auth-endpoint: https://${mcp.federation.identity-providers.okta.domain}/oauth2/v1/authorize
+        token-endpoint: https://${mcp.federation.identity-providers.okta.domain}/oauth2/v1/token
+        userinfo-endpoint: https://${mcp.federation.identity-providers.okta.domain}/oauth2/v1/userinfo
+        scopes: openid profile email offline_access
+        redirect-uri: ${mcp.federation.server.base-url}/auth/callback/okta
+        
+      # PingFederate Configuration
+      pingfederate:
+        enabled: false
+        type: oidc
+        name: "PingFederate"
+        client-id: ${PING_CLIENT_ID:your-ping-client-id}
+        client-secret: ${PING_CLIENT_SECRET:your-ping-client-secret}
+        base-url: ${PING_BASE_URL:https://your-ping-server.com}
+        auth-endpoint: ${mcp.federation.identity-providers.pingfederate.base-url}/as/authorization.oauth2
+        token-endpoint: ${mcp.federation.identity-providers.pingfederate.base-url}/as/token.oauth2
+        userinfo-endpoint: ${mcp.federation.identity-providers.pingfederate.base-url}/idp/userinfo.openid
+        scopes: openid profile email
+        redirect-uri: ${mcp.federation.server.base-url}/auth/callback/pingfederate
+    
+    # Policy Engine Configuration (Optional)
+    policy-engine:
+      enabled: false
+      endpoint: ${POLICY_ENGINE_ENDPOINT:http://localhost:9090/policy/evaluate}
+      timeout: 5000
+      headers:
+        Authorization: Bearer ${POLICY_ENGINE_TOKEN:your-policy-token}
+        Content-Type: application/json
+      
+    # Client Registration Configuration
+    client-registration:
+      dynamic-registration-enabled: true
+      default-scopes: 
+        - mcp:read
+        - mcp:write
+      max-clients-per-ip: 10
+      client-secret-length: 32
+
+# Logging Configuration
+logging:
+  level:
+    org.mcpgurus.mcp.federation: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web: INFO
+    org.springframework.cache: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
